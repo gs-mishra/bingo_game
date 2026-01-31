@@ -7,8 +7,7 @@ const app = {
         });
         const target = document.getElementById('screen-' + screenId);
         target.classList.remove('hidden');
-        // Small delay for CSS transition
-        setTimeout(() => target.classList.add('active'), 10);
+        target.classList.add('active');
     },
 
     startOffline() {
@@ -91,7 +90,7 @@ const game = {
         this.mode = 'guest';
         this.myName = document.getElementById('join-name').value;
         const code = document.getElementById('join-code').value.toUpperCase();
-        if (code.length !== 4) return alert("Invalid Code");
+        if (code.length !== 4) return app.toast("Invalid Code");
 
         this.initPeer(null, `bingo-pwa-${code}`);
     },
@@ -140,8 +139,11 @@ const game = {
                 app.nav('lobby');
                 document.getElementById('host-controls').classList.remove('hidden');
             } else {
-                // Connect to host
-                this.conn = this.peer.connect(targetPeerId);
+                // Connect to host with optimized settings
+                this.conn = this.peer.connect(targetPeerId, {
+                    serialization: 'json',
+                    reliable: true
+                });
                 this.conn.on('open', () => {
                     if (this.conn) {
                         this.conn.send({ type: 'JOIN', name: this.myName });
@@ -158,6 +160,8 @@ const game = {
         });
 
         this.peer.on('connection', (conn) => {
+            // Standardize connection settings
+            conn.serialization = 'json';
             if (this.mode === 'host') {
                 conn.on('data', data => this.handleHostData(data, conn));
                 conn.on('close', () => {

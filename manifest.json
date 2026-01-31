@@ -1,0 +1,16 @@
+{
+    "name": "P2P Bingo",
+    "short_name": "Bingo",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0f172a",
+    "theme_color": "#0f172a",
+    "description": "Offline-capable P2P Bingo Game",
+    "icons": [
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/1170/1170611.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

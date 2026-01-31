@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Multiplayer Bingo</title>
+    <meta name="theme-color" content="#ffffff">
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <button id="theme-toggle" class="theme-toggle-btn" onclick="app.toggleTheme()" aria-label="Toggle Theme">
+            <span class="icon-sun">☀️</span>
+            <span class="icon-moon">🌙</span>
+        </button>
+        <div id="toast" class="toast">Notification</div>
+
+        <!-- 1. HOME SCREEN -->
+        <div id="screen-home" class="screen active">
+            <div class="card">
+                <h1>BINGO</h1>
+                <p>Play with friends on local network or offline.</p>
+
+                <div class="form-group">
+                    <button class="btn primary full" onclick="app.nav('host')">Host Game</button>
+                    <button class="btn secondary full" onclick="app.nav('join')">Join Game</button>
+                    <button class="btn outline full" onclick="app.startOffline()">Single Player (Offline)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. HOST SETUP -->
+        <div id="screen-host" class="screen">
+            <div class="card">
+                <button class="btn btn-back outline" onclick="app.nav('home')">Back</button>
+                <h2>Host Game</h2>
+
+                <div class="form-group">
+                    <label>Your Name</label>
+                    <input type="text" id="host-name" value="Host">
+                </div>
+
+                <div class="form-group">
+                    <label>Grid Size</label>
+                    <div class="range-wrapper">
+                        <input type="range" id="host-grid" min="5" max="10" value="5"
+                            oninput="document.getElementById('grid-disp').innerText = this.value + 'x' + this.value">
+                        <span id="grid-disp" class="range-val">5x5</span>
+                    </div>
+                    <p style="font-size:0.8rem; margin-top:5px">Win Condition: Match <span id="win-lines-disp">5</span>
+                        lines</p>
+                </div>
+
+                <div style="height: 1px; background: #eee; width: 100%;"></div>
+                <button class="btn primary full" onclick="game.setupHost()">Create Room</button>
+            </div>
+        </div>
+
+        <!-- 3. JOIN GAME -->
+        <div id="screen-join" class="screen">
+            <div class="card">
+                <button class="btn btn-back outline" onclick="app.nav('home')">Back</button>
+                <h2>Join Room</h2>
+
+                <div class="form-group">
+                    <label>Your Name</label>
+                    <input type="text" id="join-name" placeholder="Name">
+                </div>
+
+                <div class="form-group">
+                    <label>Room Code</label>
+                    <input type="text" id="join-code" placeholder="ABCD" maxlength="4"
+                        style="text-transform:uppercase; letter-spacing:3px; text-align:center;">
+                </div>
+
+                <button class="btn primary full" onclick="game.joinGame()">Connect</button>
+            </div>
+        </div>
+
+        <!-- 4. LOBBY -->
+        <div id="screen-lobby" class="screen">
+            <div class="card">
+                <h2>Lobby</h2>
+                <div id="room-code-display" class="room-code">----</div>
+                <p>Share code with friends</p>
+
+                <div class="panel">
+                    <ul id="lobby-list" class="player-list"></ul>
+                </div>
+
+                <div id="host-controls" class="hidden full">
+                    <button class="btn primary full" onclick="game.triggerSetup()">Start Setup</button>
+                </div>
+                <div id="guest-waiting" class="hidden">
+                    <p>Waiting for host to start...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. BOARD SETUP (Manual/Auto) -->
+        <div id="screen-setup" class="screen">
+            <div class="card setup-card">
+                <h2>Setup Board</h2>
+                <p>Fill your grid with unique numbers from 1 to <span id="max-num-info" class="highlight">?</span>.</p>
+
+                <div class="setup-layout">
+                    <div class="setup-sidebar">
+                        <div class="form-group">
+                            <button class="btn secondary full" onclick="game.fillBoardRandom()">Auto Fill</button>
+                            <button class="btn outline full" onclick="game.clearBoardInput()">Clear</button>
+                        </div>
+
+                        <div class="setup-info panel">
+                            <p style="text-align: left; font-size: 0.9rem;">
+                                <strong>Manual Entry:</strong> Click any cell and type a number.
+                                <br><br>
+                                <strong>Constraint:</strong> Numbers must be unique and within the specified range.
+                            </p>
+                        </div>
+
+                        <button id="ready-btn" class="btn success full" onclick="game.confirmReadiness()">I'm
+                            Ready</button>
+                    </div>
+
+                    <div id="setup-grid" class="bingo-grid">
+                        <!-- Inputs generated here -->
+                    </div>
+                </div>
+
+                <div id="waiting-other-setup" class="hidden">
+                    <p class="pulse-text">Waiting for others to finish setup...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. GAME -->
+        <div id="screen-game" class="screen">
+            <div class="bingo-container">
+                <div class="game-header">
+                    <div class="stat-box">
+                        <span class="stat-label">Turn</span>
+                        <div id="turn-display" style="font-weight:700">Player 1</div>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">Called</span>
+                        <span id="last-called" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">Target</span>
+                        <span id="target-lines" style="font-weight:700">5 Lines</span>
+                    </div>
+                </div>
+
+                <div id="play-grid" class="bingo-grid"></div>
+
+                <!-- Game Info / Chat potentially -->
+                <div class="panel" style="text-align: center;">
+                    <span id="my-lines-count" class="highlight">0</span> Completed Lines
+                </div>
+            </div>
+        </div>
+
+        <!-- WIN OVERLAY -->
+        <div id="win-overlay" class="hidden">
+            <div class="win-content">
+                <h1 class="win-title">BINGO!</h1>
+                <p>Winner</p>
+                <h2 id="winner-name">Name</h2>
+                <br>
+                <button class="btn primary" onclick="location.reload()">Back to Home</button>
+            </div>
+        </div>
+
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>

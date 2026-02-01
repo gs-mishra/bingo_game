@@ -209,6 +209,9 @@ const game = {
                 if (this.players.every(pl => pl.isReady)) {
                     this.startGame();
                     this._hasClaimedWin = false;
+                } else {
+                    this.broadcast({ type: 'SYNC_PLAYERS', players: this.players });
+                    this.updateWaitingUI();
                 }
                 break;
 
@@ -230,6 +233,7 @@ const game = {
             case 'SYNC_PLAYERS':
                 this.players = data.players;
                 this.updateLobby();
+                this.updateWaitingUI();
                 break;
             case 'START_SETUP':
                 this.gridSize = data.gridSize;
@@ -374,9 +378,14 @@ const game = {
             me.isReady = true;
             if (this.players.every(p => p.isReady)) {
                 this.startGame();
+                this._hasClaimedWin = false;
+            } else {
+                this.broadcast({ type: 'SYNC_PLAYERS', players: this.players });
+                this.updateWaitingUI();
             }
         } else {
             this.conn.send({ type: 'READY' });
+            this.updateWaitingUI();
         }
     },
 
@@ -549,5 +558,25 @@ const game = {
     showWin(name) {
         document.getElementById('winner-name').innerText = name;
         document.getElementById('win-overlay').classList.remove('hidden');
+    },
+
+    updateWaitingUI() {
+        const list = document.getElementById('waiting-names');
+        if (!list) return;
+
+        // Find players who are NOT ready
+        // If I am guest, my own 'isReady' might not be synced back yet if I just clicked, 
+        // but for the purpose of "Waiting for X", I shouldn't be in the list anyway if I'm viewing this screen.
+
+        const notReady = this.players.filter(p => !p.isReady && p.id !== this.myId);
+
+        if (roomCodeDisplay = document.getElementById('waiting-list-container')) {
+            if (notReady.length === 0) {
+                // Technically implies all ready, game should start, but handle empty case
+                list.innerHTML = '<span style="opacity:0.5">Starting...</span>';
+            } else {
+                list.innerHTML = notReady.map(p => `<span class="player-tag">${p.name}</span>`).join('');
+            }
+        }
     }
 };

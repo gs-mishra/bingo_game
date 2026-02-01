@@ -106,7 +106,7 @@ const game = {
         if (size > 10) size = 10;
 
         this.gridSize = size;
-        this.linesToWin = size;
+        this.linesToWin = size; // Target: 5 lines for 5x5, 6 for 6x6, etc.
 
         // Setup mock logic
         this.players = [{ id: 'me', name: 'You' }];
@@ -208,6 +208,7 @@ const game = {
                 // Check if all ready
                 if (this.players.every(pl => pl.isReady)) {
                     this.startGame();
+                    this._hasClaimedWin = false;
                 }
                 break;
 
@@ -216,9 +217,7 @@ const game = {
                 break;
 
             case 'BINGO':
-                this.broadcast({ type: 'GAME_OVER', winner: data.name });
-                // Also show locally
-                this.showWin(data.name);
+                this.registerWin(data.name);
                 break;
         }
     },
@@ -243,6 +242,7 @@ const game = {
                 this.turnIndex = 0;
                 this.calledNumbers = [];
                 this.enterGamePhase();
+                this._hasClaimedWin = false;
                 break;
             case 'NUMBER_CALLED':
                 this.calledNumbers.push(data.number);
@@ -290,6 +290,7 @@ const game = {
     enterSetupPhase() {
         app.nav('setup');
         const grid = document.getElementById('setup-grid');
+        grid.style.setProperty('--grid-dim', this.gridSize);
         grid.style.gridTemplateColumns = `repeat(${this.gridSize}, 1fr)`;
         grid.innerHTML = '';
 
@@ -301,6 +302,7 @@ const game = {
             const input = document.createElement('input');
             input.type = 'number';
             input.className = 'grid-input';
+            if (this.gridSize >= 8) input.classList.add('dense');
             input.dataset.index = i;
             input.min = 1;
             input.max = total;
@@ -393,7 +395,9 @@ const game = {
 
     enterGamePhase() {
         app.nav('game');
+        document.getElementById('target-lines').innerText = `${this.linesToWin} Lines`;
         const grid = document.getElementById('play-grid');
+        grid.style.setProperty('--grid-dim', this.gridSize);
         grid.style.gridTemplateColumns = `repeat(${this.gridSize}, 1fr)`;
         grid.innerHTML = '';
 
@@ -402,6 +406,7 @@ const game = {
             d.className = 'grid-cell';
             d.innerText = num;
             d.dataset.num = num;
+            if (this.gridSize >= 8) d.classList.add('dense');
             d.onclick = () => this.clickCell(num);
             grid.appendChild(d);
         });
@@ -468,6 +473,33 @@ const game = {
 
     },
 
+    // Win Handling (Multi-Winner Support)
+    winnersQueue: [],
+    winTimer: null,
+
+    registerWin(name) {
+        if (!this.winnersQueue.includes(name)) {
+            this.winnersQueue.push(name);
+        }
+
+        if (!this.winTimer) {
+            // Wait for other potential winners on the same number (Network latency buffer)
+            this.winTimer = setTimeout(() => {
+                this.finalizeGame();
+            }, 1500);
+        }
+    },
+
+    finalizeGame() {
+        const winnerText = this.winnersQueue.join(' & ');
+        this.broadcast({ type: 'GAME_OVER', winner: winnerText });
+        this.showWin(winnerText);
+
+        // Reset
+        this.winnersQueue = [];
+        this.winTimer = null;
+    },
+
     checkWin() {
         const size = this.gridSize;
         let lines = 0;
@@ -501,9 +533,14 @@ const game = {
                 this.showWin("You");
             } else {
                 if (this.mode === 'host') {
-                    this.broadcast({ type: 'GAME_OVER', winner: this.myName });
+                    // Host wins, register self
+                    this.registerWin(this.myName);
                 } else {
-                    this.conn.send({ type: 'BINGO', name: this.myName });
+                    // Start spamming Bingo to host
+                    if (!this._hasClaimedWin) {
+                        this.conn.send({ type: 'BINGO', name: this.myName });
+                        this._hasClaimedWin = true; // Prevent spamming frame-by-frame
+                    }
                 }
             }
         }

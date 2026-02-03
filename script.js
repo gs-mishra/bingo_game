@@ -82,7 +82,7 @@ const game = {
         this.gridSize = parseInt(document.getElementById('host-grid').value);
         this.linesToWin = this.gridSize; // N lines for NxN
 
-        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const code = Math.floor(Math.random() * 90 + 10).toString();
         this.initPeer(code);
     },
 
@@ -90,7 +90,7 @@ const game = {
         this.mode = 'guest';
         this.myName = document.getElementById('join-name').value;
         const code = document.getElementById('join-code').value.toUpperCase();
-        if (code.length !== 4) return app.toast("Invalid Code");
+        if (code.length !== 2) return app.toast("Invalid Code");
 
         this.initPeer(null, `bingo-pwa-${code}`);
     },
@@ -222,6 +222,14 @@ const game = {
             case 'BINGO':
                 this.registerWin(data.name);
                 break;
+
+            case 'RESTART_REQUEST':
+                // Only host receives this from self (or potentially others if we allowed it, but strict host control is better)
+                if (this.mode === 'host') {
+                    this.broadcast({ type: 'RESTART_GAME' });
+                    this.resetGame();
+                }
+                break;
         }
     },
 
@@ -259,6 +267,10 @@ const game = {
                 break;
             case 'GAME_OVER':
                 this.showWin(data.winner);
+                break;
+
+            case 'RESTART_GAME':
+                this.resetGame();
                 break;
         }
     },
@@ -368,7 +380,13 @@ const game = {
         this.myBoard = values;
 
         document.getElementById('ready-btn').disabled = true;
-        document.getElementById('waiting-other-setup').classList.remove('hidden');
+        document.getElementById('ready-btn').disabled = true;
+        // document.getElementById('waiting-other-setup').classList.remove('hidden'); // Old inline way
+
+        // Show Popup if not offline
+        if (this.mode !== 'offline') {
+            document.getElementById('waiting-popup').classList.remove('hidden');
+        }
 
         if (this.mode === 'offline') {
             this.enterGamePhase(); // Instant start
@@ -403,6 +421,10 @@ const game = {
     },
 
     enterGamePhase() {
+        // Hide setups
+        document.getElementById('waiting-popup').classList.add('hidden');
+        document.getElementById('waiting-other-setup').classList.add('hidden');
+
         app.nav('game');
         document.getElementById('target-lines').innerText = `${this.linesToWin} Lines`;
         const grid = document.getElementById('play-grid');
@@ -509,30 +531,119 @@ const game = {
         this.winTimer = null;
     },
 
+    requestRestart() {
+        if (this.mode === 'host') {
+            // Broadcast restart
+            this.broadcast({ type: 'RESTART_GAME' });
+            // Reset self
+            this.resetGame(); // handleData doesn't fire for self safely with broadcast sometimes
+        }
+    },
+
+    resetGame() {
+        // Clear State
+        this.status = 'SETUP';
+        this.myBoard = [];
+        this.calledNumbers = [];
+        this.turnIndex = 0;
+        this._hasClaimedWin = false;
+
+        // Clear UI
+        document.getElementById('win-overlay').classList.add('hidden');
+        document.getElementById('waiting-popup').classList.add('hidden');
+        document.querySelectorAll('.grid-cell').forEach(c => {
+            c.classList.remove('called', 'win-line');
+        });
+
+        // Reset Player Readiness
+        this.players.forEach(p => p.isReady = false);
+
+        // Go to Setup
+        if (this.mode === 'host') {
+            this.updateLobby(); // Reset ready dots
+            this.broadcast({ type: 'SYNC_PLAYERS', players: this.players });
+            this.enterSetupPhase();
+            // Important: Re-trigger setup config for guests
+            this.triggerSetup();
+        } else if (this.mode === 'guest') {
+            // Wait for START_SETUP from host or just go to lobby?
+            // Usually simpler to just reset readiness and wait.
+            // But we can go to setup immediately if we assume same grid size.
+            // Let's go to setup with current config.
+            this.enterSetupPhase();
+        } else {
+            // Offline
+            this.startOffline(); // Re-prompt? Or just reset?
+            // For offline, let's just re-run start logic but skip prompt if we want to keep size
+            this.enterSetupPhase();
+        }
+    },
+
     checkWin() {
         const size = this.gridSize;
         let lines = 0;
+        const cells = document.querySelectorAll('.grid-cell');
 
         const isTicked = (idx) => this.calledNumbers.includes(this.myBoard[idx]);
+
+        const markLine = (indices) => {
+            indices.forEach(idx => {
+                if (cells[idx]) cells[idx].classList.add('win-line');
+            });
+        };
 
         // Rows
         for (let r = 0; r < size; r++) {
             let full = true;
-            for (let c = 0; c < size; c++) if (!isTicked(r * size + c)) full = false;
-            if (full) lines++;
+            const indices = [];
+            for (let c = 0; c < size; c++) {
+                const idx = r * size + c;
+                if (!isTicked(idx)) full = false;
+                indices.push(idx);
+            }
+            if (full) {
+                lines++;
+                markLine(indices);
+            }
         }
         // Cols
         for (let c = 0; c < size; c++) {
             let full = true;
-            for (let r = 0; r < size; r++) if (!isTicked(r * size + c)) full = false;
-            if (full) lines++;
+            const indices = [];
+            for (let r = 0; r < size; r++) {
+                const idx = r * size + c;
+                if (!isTicked(idx)) full = false;
+                indices.push(idx);
+            }
+            if (full) {
+                lines++;
+                markLine(indices);
+            }
         }
         // Diagonals
-        let d1 = true; for (let i = 0; i < size; i++) if (!isTicked(i * size + i)) d1 = false;
-        if (d1) lines++;
+        let d1 = true;
+        const d1Idx = [];
+        for (let i = 0; i < size; i++) {
+            const idx = i * size + i;
+            if (!isTicked(idx)) d1 = false;
+            d1Idx.push(idx);
+        }
+        if (d1) {
+            lines++;
+            markLine(d1Idx);
+        }
 
-        let d2 = true; for (let i = 0; i < size; i++) if (!isTicked(i * size + (size - 1 - i))) d2 = false;
-        if (d2) lines++;
+        let d2 = true;
+        const d2Idx = [];
+        for (let i = 0; i < size; i++) {
+            const idx = i * size + (size - 1 - i);
+            if (!isTicked(idx)) d2 = false;
+            d2Idx.push(idx);
+        }
+        if (d2) {
+            lines++;
+            markLine(d2Idx);
+        }
 
         document.getElementById('my-lines-count').innerText = lines;
 
@@ -558,25 +669,32 @@ const game = {
     showWin(name) {
         document.getElementById('winner-name').innerText = name;
         document.getElementById('win-overlay').classList.remove('hidden');
+
+        // Show restart button ONLY if host
+        if (this.mode === 'host') {
+            document.getElementById('restart-btn').classList.remove('hidden');
+        } else {
+            document.getElementById('restart-btn').classList.add('hidden');
+        }
     },
 
     updateWaitingUI() {
-        const list = document.getElementById('waiting-names');
-        if (!list) return;
-
-        // Find players who are NOT ready
-        // If I am guest, my own 'isReady' might not be synced back yet if I just clicked, 
-        // but for the purpose of "Waiting for X", I shouldn't be in the list anyway if I'm viewing this screen.
-
         const notReady = this.players.filter(p => !p.isReady && p.id !== this.myId);
 
-        if (roomCodeDisplay = document.getElementById('waiting-list-container')) {
-            if (notReady.length === 0) {
-                // Technically implies all ready, game should start, but handle empty case
-                list.innerHTML = '<span style="opacity:0.5">Starting...</span>';
-            } else {
-                list.innerHTML = notReady.map(p => `<span class="player-tag">${p.name}</span>`).join('');
-            }
+        // Populate standard list (lobby/setup inline) if they exist
+        const listInline = document.getElementById('waiting-names'); // Inline one
+        const listPopup = document.getElementById('popup-waiting-list'); // Popup one
+
+        const html = notReady.length === 0
+            ? '<span style="opacity:0.5">Starting...</span>'
+            : notReady.map(p => `<span class="player-tag">${p.name}</span>`).join('');
+
+        if (listInline) listInline.innerHTML = html;
+        if (listPopup) listPopup.innerHTML = html;
+
+        // If everyone ready, logic handles start elsewhere, but just in case visually:
+        if (notReady.length === 0 && this.mode !== 'offline') {
+            // Can show "Starting..." 
         }
     }
 };

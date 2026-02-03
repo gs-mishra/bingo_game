@@ -495,24 +495,41 @@ input[type="range"] {
 @media (max-width: 768px) {
     .bingo-grid {
         gap: 2px;
+        width: 100%;
         max-width: 100vw;
-        border-radius: 0;
-        /* Ensure it fits vertically if possible, but prioritize width visibility */
+        /* Strict max width */
+        margin: 0 auto;
+        /* Ensure centering */
+        padding: 0 4px;
+        /* Tiny padding from edges */
         align-content: center;
+        justify-content: center;
+        /* Center the grid items if they don't fill width */
     }
 
     .grid-cell,
     .grid-input {
         /* Mobile font scaling based on grid dimension */
         --dim: var(--grid-dim, 5);
-        /* More aggressive scaling for small screens */
-        font-size: clamp(0.7rem, calc(80vw / var(--dim) * 0.45), 1.5rem);
+        /* 
+           Calculation: 
+           (Screen Width - Gap Total) / Grid Size 
+           Gap is 2px. For 10x10, gaps take ~18px.
+           We'll be conservative with 92vw to leave margin.
+        */
+        font-size: clamp(0.5rem, calc(85vw / var(--dim) * 0.4), 1.2rem);
         border-width: 1px;
-        border-radius: 4px;
-        height: 100%;
+        border-radius: 3px;
+        height: auto;
+        /* Let aspect ratio handle height */
+        aspect-ratio: 1;
+        /* Force square */
         width: 100%;
         padding: 0;
         box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+        display: flex;
+        justify-content: center;
+        align-items: center;
     }
 
     /* Dense mode for 8x8+ on mobile */

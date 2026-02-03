@@ -176,16 +176,19 @@
                     </div>
                     <div class="stat-box">
                         <span class="stat-label">Target</span>
-                        <span id="target-lines" style="font-weight:700">5 Lines</span>
+                        <span id="target-lines" style="font-weight:700; color: var(--warning);">5 Lines</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">Completed</span>
+                        <span id="my-lines-count" class="highlight"
+                            style="font-size:2rem; font-weight:800; color: var(--success);">0</span>
                     </div>
                 </div>
 
                 <div id="play-grid" class="bingo-grid"></div>
 
                 <!-- Game Info / Chat potentially -->
-                <div class="panel" style="text-align: center;">
-                    <span id="my-lines-count" class="highlight">0</span> Completed Lines
-                </div>
+                <!-- Removed bottom panel -->
             </div>
         </div>
 
@@ -209,4 +212,3 @@
 </body>
 
 </html>
-

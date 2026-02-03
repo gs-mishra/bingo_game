@@ -506,7 +506,7 @@ input[type="range"] {
         /* Strict max width */
         margin: 0 auto;
         /* Ensure centering */
-        padding: 0;
+        padding: 0 4px;
         /* Tiny padding from edges */
         align-content: center;
         justify-content: center;
